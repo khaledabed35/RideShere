@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="D:/RideSphere/BLL/BLL.csproj" />
+  <Project Path="D:/RideSphere/DAL/DAL.csproj" />
+  <Project Path="D:/RideSphere/RideShere/RideShere.csproj" />
+</Solution>

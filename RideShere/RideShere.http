@@ -1,0 +1,6 @@
+@RideShere_HostAddress = http://localhost:5159
+
+GET {{RideShere_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
