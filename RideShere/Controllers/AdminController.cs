@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 
 namespace RideShere.Controllers
 {
-    [Authorize(Roles = "Admin")]
     [Route("api/[controller]")]
     [ApiController]
     public class AdminController : ControllerBase

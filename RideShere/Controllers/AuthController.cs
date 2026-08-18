@@ -21,17 +21,7 @@ namespace RideShere.Controllers
             _authService = authService;
         }
 
-        [HttpGet("test-mail")]
-        public async Task<IActionResult> Test()
-        {
-            var result = await _emailService.SendSimpleEmailAsync(
-                "abedk9072@gmail.com",
-                "Test",
-                "<h1>Hello</h1>");
-
-            return Ok(result);
-        }
-
+     
         [HttpPost("register-passenger")]
         public async Task<IActionResult> RegisterPassenger([FromBody] RegisterPassengerDto model)
         {

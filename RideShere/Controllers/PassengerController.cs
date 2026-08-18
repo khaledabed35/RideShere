@@ -11,7 +11,7 @@ namespace RideShere.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Passenger")]
+    [Authorize(Roles = "Passenger,Admin")]
     public class PassengerController : ControllerBase
     {
         private readonly IPassengerService _passenger;
@@ -129,9 +129,8 @@ namespace RideShere.Controllers
 
         private Guid? GetUserIdFromClaims()
         {
-            var userIdStr = User.FindFirst("uid")?.Value
-                            ?? User.FindFirst("sub")?.Value
-                            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                            ?? User.FindFirst("sub")?.Value;
 
             if (Guid.TryParse(userIdStr, out var userGuid))
             {

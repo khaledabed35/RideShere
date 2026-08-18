@@ -115,7 +115,7 @@ namespace BLL.Services.Class
             {
                 Id = Guid.NewGuid(),
                 TripId = tripId,
-                DriverId = trip.DriverId ,
+                DriverId = trip.DriverId.Value ,
                 Comment = reason, // حفظ السبب أو التعليق المُرسل
                 CreatedAt = DateTime.UtcNow
             };
@@ -278,8 +278,7 @@ namespace BLL.Services.Class
             {
                 throw new KeyNotFoundException("Trip not found or unauthorized.");
             }
-
-            var spec = new OfferSpecification(tripId); 
+            var spec = new OfferSpecification(tripId, OfferStatus.Pending);
             var offers = await _offerRepo.GetAllWithSpecAsync(spec);
 
             var offerDtos = offers.Select(o => new DriverOfferDto

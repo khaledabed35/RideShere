@@ -55,7 +55,7 @@ namespace BLL.Services.Class
                 Id = Guid.NewGuid(),
                 TripId = reviewDto.TripId,
                 ReviewerId = passengerId,
-                DriverId = trip.DriverId,
+                DriverId = trip.DriverId.Value,
                 Rating = reviewDto.Rating,
                 Comment = reviewDto.Comment,
                 CreatedAt = DateTime.UtcNow

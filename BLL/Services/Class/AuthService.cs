@@ -34,7 +34,7 @@ namespace BLL.Services.Implementation
 
         public AuthService(
             UserManager<App_User> userManager,
-            RoleManager<IdentityRole<Guid>>  roleManager,
+            RoleManager<IdentityRole<Guid>> roleManager,
             IUnitOfWork unitOfWork,
             IEmailService emailService,
             IOptions<Jwt> jwtSettings,
@@ -58,7 +58,7 @@ namespace BLL.Services.Implementation
 
             var user = new App_User
             {
-                UserName = model.Email,
+                UserName = model.username,
                 Email = model.Email,
                 FullName = $"{model.FirstName} {model.LastName}",
                 Role = UserRole.Passenger,
@@ -109,7 +109,6 @@ namespace BLL.Services.Implementation
                 throw;
             }
         }
-
         public async Task<AuthResult> RegisterDriverAsync(RegisterDriverDto model)
         {
             var existingUser = await _userManager.FindByEmailAsync(model.Email);
@@ -122,6 +121,7 @@ namespace BLL.Services.Implementation
                 Email = model.Email,
                 FullName = $"{model.FirstName} {model.LastName}",
                 Role = UserRole.Driver,
+                EmailConfirmed = false, // الإيميل مش مؤكد تلقائياً لحين مراجعة الأدمن وموافقته
                 CreatedAt = DateTimeOffset.UtcNow
             };
 
@@ -152,6 +152,20 @@ namespace BLL.Services.Implementation
                     return new AuthResult { Succeeded = false, Message = "Failed to assign driver role." };
                 }
 
+                // 1. إنشاء السجل الأساسي للسائق في جدول Drivers
+                var driver = new Driver
+                {
+                    Id = user.Id,
+                    Name = $"{model.FirstName} {model.LastName}",
+                    Email = model.Email,
+                    PhoneNumber = model.PhoneNumber,
+                    LicenseNumber = model.LicenseNumber,
+                    Status = DriverStatus.Offline
+                };
+
+                await _unitOfWork.GetRepository<Driver>().AddAsync(driver);
+
+                // 2. إنشاء مستندات السائق بالحالة Pending لكي يراجعها الأدمن
                 var driverDocument = new DriverDocument
                 {
                     DriverId = user.Id,
@@ -184,19 +198,24 @@ namespace BLL.Services.Implementation
                 throw;
             }
         }
-
         public async Task<AuthResult> LoginAsync(LoginDto model)
         {
             var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null || !await _userManager.CheckPasswordAsync(user, model.Password))
                 return new AuthResult { Succeeded = false, Message = "Invalid email or password." };
 
-            if (!await _userManager.IsEmailConfirmedAsync(user))
-                return new AuthResult { Succeeded = false, Message = "Please confirm your email first." };
-
             var roles = await _userManager.GetRolesAsync(user);
-            if (roles.Contains(Roles.Driver))
+
+            // لو المستخدم مش Driver (يعني Admin مثلاً)، ممكن تشترط عليه تفعيل الإيميل لو حابب
+            // أما لو Driver، هنتخطى فحص الـ EmailConfirmed ونعتمد على موافقة الأدمن في جدول الـ Document
+            if (!roles.Contains(Roles.Driver))
             {
+                if (!await _userManager.IsEmailConfirmedAsync(user))
+                    return new AuthResult { Succeeded = false, Message = "Please confirm your email first." };
+            }
+            else
+            {
+                // لو هو Driver، نفحص حالة المستندات مباشرة
                 var driverDoc = await _unitOfWork.GetRepository<DriverDocument>()
                     .GetByIdWithSpecAsync(new DriverDocumentSpecification(user.Id));
 
@@ -291,7 +310,7 @@ namespace BLL.Services.Implementation
 
                 try
                 {
-                    await _emailService.SendEmailAsync(user.Email!, resetLink, "auth", resetLink, "Reset Password - RideShere");
+                    await _emailService.SendEmailAsync(user.Email!, resetLink, "Reset Password - RideShere");
                 }
                 catch (Exception ex)
                 {
@@ -344,7 +363,6 @@ namespace BLL.Services.Implementation
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null || await _userManager.IsEmailConfirmedAsync(user))
             {
-                // منع User Enumeration (نفس رسالة النجاح حتى لو المستخدم غير موجود أو مؤكد مسبقاً)
                 return new AuthResult
                 {
                     Succeeded = true,
@@ -366,9 +384,9 @@ namespace BLL.Services.Implementation
             try
             {
                 var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-                var confirmationLink = $"{_baseUrl}/confirm-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
+                var confirmationLink = $"{_baseUrl}/api/auth/confirm-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
 
-                await _emailService.SendEmailAsync(user.Email!, confirmationLink, "auth", confirmationLink, "Confirm Your Email - RideShere");
+                await _emailService.SendEmailAsync(user.Email!, confirmationLink, "Confirm Your Email - RideShere");
             }
             catch (Exception ex)
             {

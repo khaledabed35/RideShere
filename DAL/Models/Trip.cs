@@ -25,7 +25,7 @@ namespace DAL.Models
         [Required]
         public Guid PassengerId { get; set; }
 
-        public Guid DriverId { get; set; }
+        public Guid? DriverId { get; set; }
 
         public Guid? CarId { get; set; }
 

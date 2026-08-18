@@ -24,17 +24,15 @@ namespace BLL.Services.Class
             _mailSetting = mailSetting.Value;
             _userManager = userManager;
         }
+     
 
-        public async Task<string> SendEmailAsync(string emailTo, string token, string controllerName, string reqUrl, string subject)
+        public async Task<string> SendEmailAsync(string emailTo, string confirmationLink, string subject)
         {
             try
             {
                 var user = await _userManager.FindByEmailAsync(emailTo);
-
                 if (user is null)
                     return "Email is incorrect.";
-
-                var confirmationLink = $"{reqUrl}/{controllerName}/confirm-email?userId={user.Id}&token={Uri.EscapeDataString(token)}";
 
                 var email = new MimeMessage();
                 email.From.Add(new MailboxAddress(_mailSetting.displayname, _mailSetting.Email));
@@ -45,69 +43,66 @@ namespace BLL.Services.Class
                 var builder = new BodyBuilder
                 {
                     HtmlBody = $@"
-                    <!DOCTYPE html>
-                    <html lang=""en"">
-                    <head>
-                        <meta charset=""UTF-8"">
-                        <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-                    </head>
-                    <body style=""margin:0;padding:0;background-color:#f4f7f6;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;"">
-                        <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""table-layout:fixed;background-color:#f4f7f6;padding:40px 0;"">
+        <!DOCTYPE html>
+        <html lang=""en"">
+        <head>
+            <meta charset=""UTF-8"">
+            <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+        </head>
+        <body style=""margin:0;padding:0;background-color:#f4f7f6;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;"">
+            <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"" style=""table-layout:fixed;background-color:#f4f7f6;padding:40px 0;"">
+                <tr>
+                    <td align=""center"">
+                        <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""600"" style=""background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.08);"">
+                            <!-- Header -->
                             <tr>
-                                <td align=""center"">
-                                    <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""600"" style=""background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 15px rgba(0,0,0,0.08);"">
-                                        <!-- Header -->
+                                <td style=""background:linear-gradient(135deg, #0d6efd 0%, #0043a8 100%);padding:30px;text-align:center;"">
+                                    <h1 style=""color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:0.5px;"">RideShere</h1>
+                                </td>
+                            </tr>
+                            <!-- Body Content -->
+                            <tr>
+                                <td style=""padding:40px 30px;"">
+                                    <h2 style=""color:#333333;margin-top:0;font-size:20px;font-weight:600;"">Confirm Your Email</h2>
+                                    <p style=""font-size:15px;color:#555555;line-height:1.6;margin-bottom:20px;"">
+                                        Hello <strong>{user.UserName}</strong>,
+                                    </p>
+                                    <p style=""font-size:15px;color:#555555;line-height:1.6;margin-bottom:30px;"">
+                                        Thank you for registering with <strong>RideShere</strong>. Please confirm your email address by clicking the secure button below.
+                                    </p>
+                                    <!-- Button -->
+                                    <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
                                         <tr>
-                                            <td style=""background:linear-gradient(135deg, #0d6efd 0%, #0043a8 100%);padding:30px;text-align:center;"">
-                                                <h1 style=""color:#ffffff;margin:0;font-size:24px;font-weight:700;letter-spacing:0.5px;"">RideShere</h1>
-                                            </td>
-                                        </tr>
-                                        <!-- Body Content -->
-                                        <tr>
-                                            <td style=""padding:40px 30px;"">
-                                                <h2 style=""color:#333333;margin-top:0;font-size:20px;font-weight:600;"">Confirm Your Email</h2>
-                                                <p style=""font-size:15px;color:#555555;line-height:1.6;margin-bottom:20px;"">
-                                                    Hello <strong>{user.UserName}</strong>,
-                                                </p>
-                                                <p style=""font-size:15px;color:#555555;line-height:1.6;margin-bottom:30px;"">
-                                                    Thank you for registering with <strong>RideShere</strong>. Please confirm your email address by clicking the secure button below.
-                                                </p>
-                                                <!-- Button -->
-                                                <table role=""presentation"" border=""0"" cellpadding=""0"" cellspacing=""0"" width=""100%"">
-                                                    <tr>
-                                                        <td align=""center"" style=""padding:10px 0 30px 0;"">
-                                                            <a href=""{confirmationLink}"" target=""_blank"" style=""background-color:#0d6efd;color:#ffffff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;font-size:16px;display:inline-block;box-shadow:0 4px 10px rgba(13,110,253,0.3);"">Confirm Email</a>
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                                <p style=""font-size:13px;color:#888888;line-height:1.5;margin-bottom:0;"">
-                                                    If you didn't create this account, you can safely ignore this email.
-                                                </p>
-                                            </td>
-                                        </tr>
-                                        <!-- Footer -->
-                                        <tr>
-                                            <td style=""background-color:#fafbfc;padding:20px;text-align:center;border-top:1px solid #eeeeee;"">
-                                                <p style=""font-size:12px;color:#999999;margin:0;"">
-                                                    &copy; 2026 RideShere. All Rights Reserved.
-                                                </p>
+                                            <td align=""center"" style=""padding:10px 0 30px 0;"">
+                                                <a href=""{confirmationLink}"" target=""_blank"" style=""background-color:#0d6efd;color:#ffffff;padding:14px 32px;text-decoration:none;border-radius:6px;font-weight:600;font-size:16px;display:inline-block;box-shadow:0 4px 10px rgba(13,110,253,0.3);"">Confirm Email</a>
                                             </td>
                                         </tr>
                                     </table>
+                                    <p style=""font-size:13px;color:#888888;line-height:1.5;margin-bottom:0;"">
+                                        If you didn't create this account, you can safely ignore this email.
+                                    </p>
+                                </td>
+                            </tr>
+                            <!-- Footer -->
+                            <tr>
+                                <td style=""background-color:#fafbfc;padding:20px;text-align:center;border-top:1px solid #eeeeee;"">
+                                    <p style=""font-size:12px;color:#999999;margin:0;"">
+                                        &copy; 2026 RideShere. All Rights Reserved.
+                                    </p>
                                 </td>
                             </tr>
                         </table>
-                    </body>
-                    </html>"
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>"
                 };
+
 
                 email.Body = builder.ToMessageBody();
 
                 using var smtp = new SmtpClient();
-                Console.WriteLine($"Email: {_mailSetting.Email}");
-                Console.WriteLine($"Password Length: {_mailSetting.password?.Length}");
-                Console.WriteLine($"Host: {_mailSetting.host}");
-                Console.WriteLine($"Port: {_mailSetting.port}");
                 await smtp.ConnectAsync(_mailSetting.host, int.Parse(_mailSetting.port), SecureSocketOptions.SslOnConnect);
                 await smtp.AuthenticateAsync(_mailSetting.Email, _mailSetting.password);
                 await smtp.SendAsync(email);
@@ -115,11 +110,12 @@ namespace BLL.Services.Class
 
                 return string.Empty;
             }
-            catch (Exception ex)
-            {
+    catch(Exception ex)
+        {
                 return ex.Message;
             }
         }
+
 
         public async Task<string> SendResetPasswordEmailAsync(string emailTo, string token, string controllerName, string reqUrl, string subject)
         {

@@ -84,17 +84,17 @@ namespace BLL.Services.Class
 
             _unitOfWork.GetRepository<DriverDocument>().Update(driverDoc);
             await _unitOfWork.CompleteAsync();
-
             var appUser = driverDoc.Driver?.User;
             if (appUser != null && !await _userManager.IsEmailConfirmedAsync(appUser))
             {
                 try
                 {
                     var token = await _userManager.GenerateEmailConfirmationTokenAsync(appUser);
-                    var baseUrl = _configuration["MailSettings:BaseUrl"] ?? "https://localhost:7200";
+
+                    var baseUrl = _configuration["MailSettings:BaseUrl"] ?? _configuration["AppSettings:BaseUrl"] ?? "https://localhost:7020";
                     var confirmationUrl = $"{baseUrl}/api/auth/confirm-email?userId={appUser.Id}&token={Uri.EscapeDataString(token)}";
 
-                    await _emailService.SendEmailAsync(appUser.Email, token, "auth", confirmationUrl, "Account Approved - Confirm Email");
+                    await _emailService.SendEmailAsync(appUser.Email!, confirmationUrl, "Account Approved - Confirm Your Email");
                 }
                 catch (Exception ex)
                 {
@@ -137,14 +137,16 @@ namespace BLL.Services.Class
             {
                 try
                 {
-                    await _emailService.SendEmailAsync(appUser.Email, string.Empty, "rejection", string.Empty, $"Rejected: {rejectionReason}");
+                    // بناء رسالة أو محتوى الرفض وإرساله بالطريقة المباشرة
+                    string rejectionMessage = $"Your driver application has been rejected. Reason: {rejectionReason}";
+
+                    await _emailService.SendEmailAsync(appUser.Email, rejectionMessage, "Driver Application Rejected");
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to send rejection email to driver {DriverId}", driverId);
                 }
             }
-
             await IncrementPendingDriversVersionAsync();
         }
 

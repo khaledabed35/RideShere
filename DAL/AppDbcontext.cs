@@ -33,7 +33,7 @@ namespace DAL
        .HasIndex(d => d.DriverId)
        .IsUnique();
 
-            modelBuilder.HasPostgresExtension("postgis");
+            //modelBuilder.HasPostgresExtension("postgis");
 
             modelBuilder.Entity<App_User>()
                 .Property(u => u.Role)
@@ -128,6 +128,11 @@ namespace DAL
     .WithMany(u => u.notifications)
     .HasForeignKey(n => n.UserId)
     .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Trip>()
+    .HasOne(t => t.Driver)
+    .WithMany()
+    .HasForeignKey(t => t.DriverId)
+    .OnDelete(DeleteBehavior.Restrict);
         }
        
 
