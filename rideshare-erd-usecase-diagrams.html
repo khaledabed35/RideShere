@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RideShare — ERD &amp; Use Case Diagrams</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1f2328; --muted:#57606a; --line:#d0d7de;
+    --accent:#0f6e56; --accent-bg:#e1f5ee; --warn:#993c1d; --warn-bg:#faece7;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    max-width:980px; margin:0 auto; padding:40px 24px 100px; color:var(--ink); line-height:1.6;
+    background:var(--bg);
+  }
+  h1{font-size:28px; margin-bottom:4px;}
+  h2{font-size:21px; margin-top:56px; padding-bottom:8px; border-bottom:2px solid var(--line);}
+  h3{font-size:16px; margin-top:28px; color:var(--ink);}
+  .subtitle{color:var(--muted); font-size:15px; margin-top:0;}
+  .stack{ background:#f6f8fa; border:1px solid var(--line); border-radius:8px; padding:2px 8px; font-family:ui-monospace,Consolas,monospace; font-size:13px;}
+  .diagram-card{ border:1px solid var(--line); border-radius:12px; padding:20px; margin:20px 0; overflow-x:auto; background:#fff;}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14px;}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top;}
+  th{background:#f6f8fa;}
+  ul{margin:8px 0;}
+  li{margin:3px 0;}
+  .note{ background:var(--accent-bg); border:1px solid #9fe1cb; border-radius:8px; padding:10px 14px; margin:14px 0; font-size:14px;}
+  .warn{ background:var(--warn-bg); border:1px solid #f0997b; border-radius:8px; padding:10px 14px; margin:14px 0; font-size:14px;}
+  .badge{ display:inline-block; padding:2px 8px; border-radius:12px; font-size:12px; font-weight:600; margin-right:6px;}
+  .b-confirmed{ background:#e1f5ee; color:#085041;}
+  .b-inferred{ background:#faeeda; color:#633806;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:700px){ .grid2{grid-template-columns:1fr;} }
+  .col-header{ font-weight:600; margin-bottom:6px; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.4px;}
+</style>
+</head>
+<body>
+
+<h1>RideShare — Entity Relationship &amp; Use Case Diagrams</h1>
+<p class="subtitle">Derived from the actual C# domain model (ASP.NET Core Identity, EF Core, PostGIS, Paymob). Diagrams reflect confirmed foreign keys and flag ambiguities rather than inventing constraints.</p>
+
+<h2>A. Entity Relationship Diagram (ERD)</h2>
+
+<p>The system uses <span class="stack">ASP.NET Core Identity</span> — <span class="stack">App_User</span> inherits <span class="stack">IdentityUser&lt;Guid&gt;</span>, so it is the base identity table for all roles (Passenger, Driver, Admin). DTOs (<span class="stack">RegisterModel</span>, <span class="stack">LoginModel</span>, <span class="stack">ForgetPasswordConfirm</span>, <span class="stack">AuthModel</span>) and enums are intentionally excluded as tables.</p>
+
+<div class="diagram-card">
+<div id="erd"></div>
+</div>
+
+<h3>Major relationships</h3>
+<ul>
+  <li><b>App_User → Driver (1:1, identity specialization)</b>: <span class="stack">Driver.Id</span> is both PK and FK to <span class="stack">App_User.Id</span> — a driver <i>is</i> a user with an extended profile, sharing the same Guid.</li>
+  <li><b>App_User → AddressModel, Notification, Trip, Review (1:N)</b>: a user can save multiple addresses, receive many notifications, request many trips as a passenger, and author many reviews.</li>
+  <li><b>Driver → DriverDocument (1:1)</b>: the driver's onboarding/verification packet (license, national ID, car photos) tied to one driver.</li>
+  <li><b>Driver → Car (1:N)</b>: cars carry <span class="stack">DriverId</span> as FK; a driver can be linked to multiple car rows in the schema as written.</li>
+  <li><b>Driver → Offer, Trip, Payout (1:N)</b>: a driver submits many offers, participates in many trips (nullable FK on Trip), and receives many payouts.</li>
+  <li><b>Trip → Offer, TripStatusLog (1:N)</b>: a trip collects multiple driver offers and logs every status transition.</li>
+  <li><b>Trip → Payment (1:0..1)</b>: a trip optionally has one payment record as modeled.</li>
+  <li><b>Trip → Car (0..1)</b>: a trip may optionally reference the assigned car once a driver/offer is accepted.</li>
+  <li><b>Payment → Payout (1:N)</b>: a payment can fund one or more payout records to the driver.</li>
+</ul>
+
+<h2>B. Use Case Diagram</h2>
+
+<p>Actors: <b>Passenger</b>, <b>Driver</b>, and <b>Admin</b> are primary human actors; <b>Paymob</b> is an external system actor reached only through the payment flow. The diagram below shows the core use cases and their <span class="stack">&lt;&lt;include&gt;&gt;</span> / <span class="stack">&lt;&lt;extend&gt;&gt;</span> relationships; the complete use-case inventory per actor follows in the tables beneath it.</p>
+
+<div class="diagram-card">
+<div id="usecase"></div>
+</div>
+
+<h3>Main business flows</h3>
+<ul>
+  <li><b>Ride request → offer → acceptance</b>: passenger requests a ride (includes pickup/dropoff selection, fare estimate, payment method); the request is exposed to nearby drivers; drivers submit priced offers; the passenger accepts one, which assigns the driver (and its car) to the trip and sets the agreed fare.</li>
+  <li><b>Trip execution</b>: the driver updates trip status (arrived → in progress → completed); each transition is written to the trip status log; the passenger tracks progress in real time.</li>
+  <li><b>Payment</b>: on completion, the passenger pays by cash or through Paymob; Paymob-based payments hand off to the external gateway for processing, and a webhook updates the payment status asynchronously.</li>
+  <li><b>Driver verification</b>: a new driver submits documents (national ID, license, car license); an admin reviews and approves or rejects them with a reason before the driver can go online.</li>
+  <li><b>Post-trip</b>: the passenger rates the driver and can leave a review; the driver accrues earnings that are later paid out.</li>
+  <li><b>Cancellation</b> is modeled as an alternative flow off <span class="stack">Request Ride</span> / <span class="stack">Update Ride Status</span>, available to both passenger and driver up to certain trip states.</li>
+</ul>
+
+<h3>Full use case inventory</h3>
+<div class="grid2">
+<div>
+<div class="col-header">Passenger</div>
+<ul>
+<li>Register / Login / Logout / Refresh token</li>
+<li>Verify account, Reset/forgot password</li>
+<li>Manage profile, Manage addresses</li>
+<li>Request ride (includes: select pickup, select dropoff, view fare estimate, choose payment method)</li>
+<li>View nearby drivers, Receive &amp; view driver offers</li>
+<li>Accept / reject driver offer</li>
+<li>Track current ride, View trip status &amp; status history</li>
+<li>Cancel trip</li>
+<li>Pay for trip (cash or Paymob)</li>
+<li>View trip history &amp; trip details</li>
+<li>Rate driver, Write review, View driver reviews</li>
+<li>Receive notifications, Mark notifications as read</li>
+</ul>
+</div>
+<div>
+<div class="col-header">Driver</div>
+<ul>
+<li>Register as driver, Login / Logout</li>
+<li>Submit driver documents (national ID, license, car license)</li>
+<li>Add / manage car</li>
+<li>View verification status</li>
+<li>Receive &amp; view nearby ride requests</li>
+<li>Accept / reject ride, Submit custom fare offer</li>
+<li>Update online/offline status, Update live location</li>
+<li>Update ride status, Complete ride, Cancel ride</li>
+<li>View current ride</li>
+<li>View earnings, View payouts</li>
+<li>Receive notifications</li>
+</ul>
+</div>
+<div>
+<div class="col-header">Admin</div>
+<ul>
+<li>Login</li>
+<li>Manage / view users (passengers &amp; drivers)</li>
+<li>Review driver documents, Approve / reject driver, Provide rejection reason</li>
+<li>Manage &amp; monitor trips, View trip details &amp; history</li>
+<li>Manage / monitor payments, View payouts</li>
+<li>Monitor reviews</li>
+<li>Manage notifications *</li>
+<li>View system statistics *, Manage platform data *</li>
+</ul>
+<p style="font-size:12px;color:var(--muted)">* Not directly backed by a model in the provided domain — would need dedicated aggregation/reporting endpoints to implement.</p>
+</div>
+<div>
+<div class="col-header">Paymob (external actor)</div>
+<ul>
+<li>Initiate payment</li>
+<li>Process payment</li>
+<li>Return payment result</li>
+<li>Send payment webhook</li>
+<li>Update payment status</li>
+</ul>
+</div>
+</div>
+
+<h2>C. Validation &amp; Inconsistencies</h2>
+<p>Before finalizing, these points in the provided C# model deserve explicit attention rather than a silent fix:</p>
+
+<table>
+<tr><th style="width:26%">Area</th><th>Observation</th><th style="width:14%">Status</th></tr>
+<tr>
+  <td><span class="stack">Review.DriverId</span></td>
+  <td>Present as a Guid property, but no navigation property or <span class="stack">[ForeignKey]</span> attribute is shown. EF Core will not create a relational FK constraint for it unless configured (Fluent API or attribute). Drawn in the ERD as a plain reference, not a modeled relationship.</td>
+  <td><span class="badge b-inferred">Inferred</span></td>
+</tr>
+<tr>
+  <td><span class="stack">Notification.TripId</span> / <span class="stack">OfferId</span></td>
+  <td>Both are nullable Guids with no explicit FK configuration shown. Treated as optional soft-references in the ERD, not enforced foreign keys, until confirmed in <span class="stack">OnModelCreating</span>.</td>
+  <td><span class="badge b-inferred">Inferred</span></td>
+</tr>
+<tr>
+  <td><span class="stack">Payment.TripId</span> cardinality</td>
+  <td><span class="stack">TripId</span> is required on Payment, but whether the database allows multiple Payment rows per Trip (e.g. retries) depends on whether a unique index/constraint is placed on <span class="stack">TripId</span>. Modeled as 1 : 0..1 per the stated business rule, but this must be verified against the actual EF configuration.</td>
+  <td><span class="badge b-inferred">Inferred</span></td>
+</tr>
+<tr>
+  <td><span class="stack">Driver → Car</span> cardinality</td>
+  <td><span class="stack">Car.DriverId</span> exists as an FK, but <span class="stack">Driver</span> is not shown with a <span class="stack">Cars</span> collection navigation property. The FK direction confirms Car belongs to a Driver; whether one driver can legitimately register more than one car is a business rule that isn't enforced by a unique constraint in what was provided.</td>
+  <td><span class="badge b-confirmed">Confirmed FK</span> / <span class="badge b-inferred">Cardinality inferred</span></td>
+</tr>
+<tr>
+  <td><span class="stack">DriverDocument</span> uniqueness</td>
+  <td>Conceptually one document set per driver, but nothing in the provided model guarantees a unique constraint on <span class="stack">DriverDocument.DriverId</span>. Without it, the "1:1" is only a convention, not an enforced database rule.</td>
+  <td><span class="badge b-inferred">Inferred</span></td>
+</tr>
+<tr>
+  <td><span class="stack">Payout.PaymentId</span> cardinality</td>
+  <td><span class="stack">PaymentId</span> is required on Payout, and the ERD models Payment 1 : N Payout (e.g. partial/split payouts), but this depends entirely on EF Core configuration not shown here.</td>
+  <td><span class="badge b-inferred">Inferred</span></td>
+</tr>
+</table>
+
+<div class="note"><b>Confirmed from the C# model:</b> App_User↔Driver (shared Guid PK/FK), AddressModel→App_User, Car→Driver, Offer→Trip &amp; Offer→Driver, TripStatusLog→Trip, Trip→App_User (passenger).</div>
+<div class="warn"><b>Needs EF Core verification before treating as a hard constraint:</b> Review→Driver, Notification→Trip/Offer, Payment→Trip cardinality, DriverDocument uniqueness, Payout→Payment cardinality.</div>
+
+<h2>Infrastructure notes</h2>
+<ul>
+  <li><b>PostGIS / NetTopologySuite</b> — <span class="stack">Trip.PickupLocation</span> and <span class="stack">DropoffLocation</span> are geography <span class="stack">Point</span> columns, not separate tables.</li>
+  <li><b>Redis</b> — used for real-time/location data (e.g. nearby-driver lookups), intentionally excluded from the relational ERD since it isn't a relational store.</li>
+  <li><b>JWT / Refresh tokens</b> — persisted as plain columns on <span class="stack">App_User</span> (<span class="stack">RefreshToken</span>, <span class="stack">RefreshTokenExpireTime</span>), not a separate token table.</li>
+  <li><b>Paymob</b> — appears only as an external actor and as gateway-identifier columns on <span class="stack">Payment</span>, never as a persisted domain entity.</li>
+</ul>
+
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad:false, theme:'base', securityLevel:'loose',
+  themeVariables:{
+    fontFamily:'-apple-system,Segoe UI,Helvetica,Arial,sans-serif',
+    fontSize:'13px',
+    primaryColor:'#e1f5ee',
+    primaryBorderColor:'#0f6e56',
+    primaryTextColor:'#04342c',
+    lineColor:'#57606a',
+    tertiaryColor:'#f6f8fa'
+  }});
+
+const erd = `
+erDiagram
+  APP_USER ||--o{ ADDRESS_MODEL : has
+  APP_USER ||--o{ NOTIFICATION : receives
+  APP_USER ||--o{ TRIP : requests
+  APP_USER ||--o{ REVIEW : writes
+  APP_USER ||--|| DRIVER : "specializes as"
+  DRIVER ||--|| DRIVER_DOCUMENT : verifies
+  DRIVER ||--o{ CAR : owns
+  DRIVER ||--o{ OFFER : submits
+  DRIVER ||--o{ TRIP : "drives (nullable)"
+  DRIVER ||--o{ PAYOUT : receives
+  TRIP ||--o{ OFFER : receives
+  TRIP ||--o{ TRIP_STATUS_LOG : logs
+  TRIP ||--o| PAYMENT : "0..1"
+  CAR ||--o{ TRIP : "assigned to (nullable)"
+  PAYMENT ||--o{ PAYOUT : funds
+  TRIP ||--o{ REVIEW : "reviewed via"
+  DRIVER ||--o{ REVIEW : "unverified FK - to confirm"
+  TRIP |o--o{ NOTIFICATION : "optional ref"
+  OFFER |o--o{ NOTIFICATION : "optional ref"
+
+  APP_USER {
+    guid Id PK
+    string FullName
+    string Email
+    string UserName
+    string PhoneNumber
+    string Role
+    datetime CreatedAt
+    string ImageUrl
+    string RefreshToken
+  }
+  ADDRESS_MODEL {
+    int Id PK
+    guid UserId FK
+    string AddressName
+    string City
+    string Address
+  }
+  DRIVER {
+    guid Id PK "also FK to App_User"
+    string Name
+    string LicenseNumber
+    string Status
+    float Rating
+    datetime VerifiedAt
+  }
+  DRIVER_DOCUMENT {
+    int Id PK
+    guid DriverId FK
+    string CarModel
+    string CarPlateNumber
+    string Status
+    string RejectionReason
+  }
+  CAR {
+    guid Id PK
+    guid DriverId FK
+    string Brand
+    string Model
+    string PlateNumber
+    string Category
+  }
+  TRIP {
+    guid Id PK
+    guid PassengerId FK
+    guid DriverId FK "nullable"
+    guid CarId FK "nullable"
+    point PickupLocation
+    point DropoffLocation
+    string Status
+    decimal EstimatedFare
+    decimal AgreedFare
+    decimal FinalFare
+    string PaymentMethod
+  }
+  OFFER {
+    guid Id PK
+    guid TripId FK
+    guid DriverId FK
+    decimal OfferedPrice
+    string Status
+  }
+  PAYMENT {
+    guid Id PK
+    guid TripId FK
+    decimal Amount
+    string Status
+    string GatewayOrderId
+    string GatewayTransactionId
+    string Method
+  }
+  PAYOUT {
+    guid Id PK
+    guid PaymentId FK
+    guid DriverId FK
+    decimal Amount
+    string Status
+  }
+  REVIEW {
+    guid Id PK
+    guid DriverId
+    guid TripId FK
+    guid ReviewerId FK
+    int Rating
+    string Comment
+  }
+  TRIP_STATUS_LOG {
+    guid Id PK
+    guid TripId FK
+    string Status
+    datetime ChangedAt
+    string Notes
+  }
+  NOTIFICATION {
+    int Id PK
+    guid UserId FK
+    guid TripId FK "nullable"
+    guid OfferId FK "nullable"
+    string Type
+    string Title
+    bool IsRead
+  }
+`;
+
+const usecase = `
+flowchart LR
+  Passenger(["Passenger"])
+  Driver(["Driver"])
+  Admin(["Admin"])
+  Paymob[["Paymob<br/>(external system)"]]
+
+  subgraph SYS["RideShare system"]
+    direction TB
+    UC1(["Register / Login"])
+    UC2(["Manage profile &amp; addresses"])
+    UC3(["Request ride"])
+    UC3a(["Select pickup / dropoff"])
+    UC3b(["View fare estimate"])
+    UC3c(["Choose payment method"])
+    UC4(["Receive driver offers"])
+    UC4a(["Compare &amp; accept offer"])
+    UC5(["Track trip status"])
+    UC6(["Cancel trip"])
+    UC7(["Pay for trip"])
+    UC8(["Rate &amp; review driver"])
+    UC9(["Register as driver"])
+    UC10(["Submit driver documents"])
+    UC11(["Manage car"])
+    UC12(["Receive ride requests"])
+    UC13(["Submit fare offer"])
+    UC14(["Update ride status"])
+    UC15(["View earnings / payouts"])
+    UC16(["Manage users"])
+    UC17(["Verify driver"])
+    UC17a(["Review documents"])
+    UC17b(["Approve / reject driver"])
+    UC18(["Monitor trips &amp; payments"])
+    UC19(["Process payment"])
+    UC20(["Send payment webhook"])
+  end
+
+  Passenger --- UC1
+  Passenger --- UC2
+  Passenger --- UC3
+  Passenger --- UC4
+  Passenger --- UC5
+  Passenger --- UC6
+  Passenger --- UC7
+  Passenger --- UC8
+
+  Driver --- UC1
+  Driver --- UC9
+  Driver --- UC10
+  Driver --- UC11
+  Driver --- UC12
+  Driver --- UC13
+  Driver --- UC14
+  Driver --- UC15
+
+  Admin --- UC16
+  Admin --- UC17
+  Admin --- UC18
+
+  Paymob --- UC19
+  Paymob --- UC20
+
+  UC3 -.include.-> UC3a
+  UC3 -.include.-> UC3b
+  UC3 -.include.-> UC3c
+  UC4 -.include.-> UC4a
+  UC6 -.extend.-> UC3
+  UC17 -.include.-> UC17a
+  UC17 -.include.-> UC17b
+  UC7 -.include.-> UC19
+  UC19 -.include.-> UC20
+`;
+
+const erdDiv = document.getElementById('erd');
+const ucDiv = document.getElementById('usecase');
+const { svg: erdSvg } = await mermaid.render('erd-svg', erd);
+erdDiv.innerHTML = erdSvg;
+const { svg: ucSvg } = await mermaid.render('uc-svg', usecase);
+ucDiv.innerHTML = ucSvg;
+</script>
+</body>
+</html>
